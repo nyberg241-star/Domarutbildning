@@ -245,6 +245,8 @@
         </thead>
         <tbody id="leaderboard-body"></tbody>
       </table>
+      <!-- Knapp för att gå tillbaka till föregående vy (start- eller spelvy) -->
+      <button id="back-button" class="hidden" style="margin-top: 1rem; padding: 0.75rem 1.5rem; font-size: 1rem; background-color: #fdd835; color: #00295c; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Tillbaka</button>
     </div>
   </div>
   <script>
@@ -582,6 +584,9 @@
     let timeLeft = 0;
     let currentTimeLimit = 0;
 
+    // Håller reda på vilken vy som var aktiv innan topplistan visades ("start" eller "quiz")
+    let previousView = "start";
+
     // Keys for saving progress and scores in localStorage
     const progressKeyPrefix = "domarresanProgress_";
 
@@ -620,6 +625,7 @@
     const levelProgressBar = document.getElementById("level-progress");
     const leaderboardDiv = document.getElementById("leaderboard");
     const leaderboardBody = document.getElementById("leaderboard-body");
+    const backButton = document.getElementById("back-button");
 
     // Helper to get questions for current level
     function getQuestionsForLevel(level) {
@@ -839,12 +845,29 @@
       leaderboardBody.innerHTML = "";
       scores.forEach((entry, index) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${
-          levels[entry.level - 1] || "-"
-        }</td>`;
+        // Use entry.level directly to fetch current level name. If level is 0, it shows the first element.
+        const levelName = levels[entry.level] || levels[0];
+        tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${levelName}</td>`;
         leaderboardBody.appendChild(tr);
       });
       showMessage(`Quiz klart! Slutpoäng: ${score}`, true);
+    }
+
+    // Update or insert player's current progress into high score list. Called after each status update.
+    function updateHighScore() {
+      if (!playerName) return;
+      const scores = JSON.parse(localStorage.getItem("domarresanScores") || "[]");
+      const existing = scores.find((s) => s.name === playerName);
+      const record = { name: playerName, score: score, level: currentLevel };
+      if (!existing) {
+        scores.push(record);
+      } else {
+        if (record.score > existing.score || record.level > existing.level) {
+          const idx = scores.indexOf(existing);
+          scores[idx] = record;
+        }
+      }
+      localStorage.setItem("domarresanScores", JSON.stringify(scores));
     }
 
     // Update status display
@@ -854,6 +877,8 @@
       streakEl.textContent = `Streak: ${currentStreak}`;
       // Spara progress efter varje statusuppdatering
       saveProgress();
+      // Uppdatera topplistan med aktuell poäng och nivå
+      updateHighScore();
     }
 
     // Start button handler
@@ -903,17 +928,42 @@
         leaderboardBody.innerHTML = "";
         scores.forEach((entry, index) => {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${
-            levels[entry.level - 1] || "-"
-          }</td>`;
+          // Visa nivånamn direkt baserat på index. Om nivå är 0 visas första nivån.
+          const levelName = levels[entry.level] || levels[0];
+          tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${levelName}</td>`;
           leaderboardBody.appendChild(tr);
         });
-        // Visa topplistan och dölj startskärmen och quizrutan
+        // Bestäm vilken vy som var aktiv innan topplistan öppnades
+        if (!startScreen.classList.contains("hidden")) {
+          previousView = "start";
+        } else if (!quizBox.classList.contains("hidden")) {
+          previousView = "quiz";
+        } else {
+          previousView = "start";
+        }
+        // Visa topplistan och göm övriga vyer
         startScreen.classList.add("hidden");
         quizBox.classList.add("hidden");
         messageEl.classList.add("hidden");
         leaderboardDiv.classList.remove("hidden");
+        // Visa tillbaka-knappen
+        backButton.classList.remove("hidden");
       });
+
+    // Back button handler för att återgå till start- eller spelvyn
+    backButton.addEventListener("click", () => {
+      // Dölj topplistan
+      leaderboardDiv.classList.add("hidden");
+      backButton.classList.add("hidden");
+      // Återgå till tidigare vy
+      if (previousView === "quiz") {
+        quizBox.classList.remove("hidden");
+        // Visa statusraden och eventuellt meddelande
+        levelProgressBar.style.width = levelProgressBar.style.width;
+      } else {
+        startScreen.classList.remove("hidden");
+      }
+    });
 
     // Visa meddelanden utan att använda blockerande alert
     function showMessage(text, isCorrect) {

@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DomarQuiz – Lär dig fotbollens regler</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f4f8;
+      color: #333;
+    }
+    header {
+      /* Mörkblå färg inspirerad av SvFF:s hemsida */
+      background-color: #00295c;
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    .hidden {
+      display: none;
+    }
+    #quiz-box {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    .question {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+    }
+    .options {
+      display: flex;
+      flex-direction: column;
+    }
+    .options button {
+      background-color: #e1e5ea;
+      border: none;
+      border-radius: 4px;
+      padding: 0.75rem;
+      margin: 0.25rem 0;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .options button:hover {
+      background-color: #d5dce4;
+    }
+    #status {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.9rem;
+    }
+    #status span {
+      background-color: #fff;
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    #next-button,
+    #rescue-button {
+      margin-top: 1rem;
+      padding: 0.75rem 1.5rem;
+      background-color: #fdd835;
+      color: #00295c;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #next-button:hover,
+    #rescue-button:hover {
+      background-color: #fbc02d;
+    }
+    /* Varningsfärg för räddningsknapp */
+    #rescue-button {
+      background-color: #e53935;
+      color: #fff;
+    }
+    #rescue-button:hover {
+      background-color: #c62828;
+    }
+    #start-screen {
+      text-align: center;
+      margin-top: 2rem;
+    }
+    #start-screen input {
+      padding: 0.75rem;
+      font-size: 1rem;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    #start-screen button {
+      margin-left: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      background-color: #fdd835;
+      color: #00295c;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #start-screen button:hover {
+      background-color: #fbc02d;
+    }
+    #leaderboard {
+      margin-top: 2rem;
+    }
+    #leaderboard h2 {
+      margin-bottom: 0.5rem;
+    }
+    #leaderboard table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #leaderboard th,
+    #leaderboard td {
+      border: 1px solid #ddd;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    #leaderboard th {
+      background-color: #f8f9fa;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>DomarQuiz – Lär dig fotbollens regler</h1>
+  </header>
+  <div class="container">
+    <div id="start-screen">
+      <p>Välkommen! Ange ditt namn för att börja din domarkarriär:</p>
+      <input type="text" id="player-name" placeholder="Ditt namn" />
+      <button id="start-button">Starta</button>
+    </div>
+    <div id="quiz-box" class="hidden">
+      <div class="question" id="question"></div>
+      <div class="options" id="options"></div>
+      <button id="rescue-button" class="hidden">Räddningsfråga</button>
+      <button id="next-button" class="hidden">Nästa fråga</button>
+      <div id="status">
+        <span id="level"></span>
+        <span id="score"></span>
+        <span id="streak"></span>
+        <span id="timer"></span>
+      </div>
+    </div>
+    <div id="leaderboard" class="hidden">
+      <h2>High Score</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Spelare</th>
+            <th>Poäng</th>
+            <th>Nivå</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    // === DomarQuiz: all logik samlad i ett enda dokument ===
+    // Grundfrågor som används för att generera en stor frågebank.
+    // Varje objekt har: level-index, frågetext, alternativ, korrekt index, förklaring och typ ("multiple", "scenario" etc.).
+    const baseQuestions = [
+      // 3v3-nivå
+      {
+        level: 0,
+        type: "multiple",
+        question: "Varför spelar man i spelformerna 3 mot 3 för de yngsta barnen?",
+        options: [
+          "För att det ska bli fler spelare på plan",
+          "För att varje spelare får fler bollkontakter och enklare spelsituationer",
+          "För att använda större plan tidigt",
+          "För att kunna göra fler mål direkt på hörna",
+        ],
+        correct: 1,
+        explanation:
+          "Mindre plan och färre spelare gör att barnen får fler bollkontakter och enklare spelsituationer.",
+      },
+      {
+        level: 0,
+        type: "multiple",
+        question: "Hur många perioder spelas i en 3‑mot‑3‑match och hur långa är de?",
+        options: [
+          "2 perioder om 10 minuter",
+          "3 perioder om 5 minuter",
+          "4 perioder om 3 minuter",
+          "1 period om 20 minuter",
+        ],
+        correct: 2,
+        explanation:
+          "En 3‑mot‑3‑match består av fyra perioder på cirka 3 minuter vardera.",
+      },
+      {
+        level: 0,
+        type: "multiple",
+        question: "Får man använda en målvakt i 3‑mot‑3?",
+        options: [
+          "Ja, en spelare får stå i mål",
+          "Nej, alla tre spelare är utespelare",
+          "Bara om laget ligger under",
+          "Bara om målet är större än 1,6 m",
+        ],
+        correct: 1,
+        explanation:
+          "I 3‑mot‑3 finns ingen målvakt – alla spelare är utespelare.",
+      },
+      {
+        level: 0,
+        type: "scenario",
+        question: "Du dömer en 3v3-match där ett lag ligger under med fyra mål. Vad händer?",
+        options: [
+          "Inget särskilt, spelet fortsätter",
+          "Det ledande laget tar ut en spelare",
+          "Det underlägsna laget får sätta in en extra spelare",
+          "Matchen avbryts och resultatet står fast",
+        ],
+        correct: 2,
+        explanation:
+          "Laget som ligger under med minst fyra mål får spela med en extra spelare tills skillnaden minskar.",
+      },
+      // 5v5-nivå
+      {
+        level: 1,
+        type: "multiple",
+        question:
+          "Hur långt ska motspelarna stå från bollen när ditt lag har frispark i 5‑mot‑5?",
+        options: ["3 meter", "5 meter", "7 meter", "9 meter"],
+        correct: 1,
+        explanation:
+          "I 5‑mot‑5 ska motståndarna stå minst fem meter från bollen vid frispark.",
+      },
+      {
+        level: 1,
+        type: "multiple",
+        question: "Får man göra mål direkt på en hörnspark i 5‑mot‑5?",
+        options: [
+          "Ja, alltid",
+          "Nej, bollen måste vidröra en spelare först",
+          "Bara om målvakten nuddar bollen",
+          "Bara i andra halvlek",
+        ],
+        correct: 1,
+        explanation:
+          "I 5‑mot‑5 får man inte göra mål direkt på hörnspark – bollen måste röra en annan spelare först.",
+      },
+      {
+        level: 1,
+        type: "multiple",
+        question: "Vad gäller vid avspark i 5‑mot‑5?",
+        options: [
+          "Motståndarna måste stå på egen planhalva och minst tre meter bort",
+          "Motståndarna måste stå på egen planhalva och minst fem meter bort",
+          "Motståndarna får stå var de vill",
+          "Man får inte göra mål direkt på avspark",
+        ],
+        correct: 1,
+        explanation:
+          "Vid avspark i 5‑mot‑5 ska alla motståndare vara på egen planhalva och minst fem meter från bollen.",
+      },
+      {
+        level: 1,
+        type: "scenario",
+        question: "Du dömer en 5v5-match. Var får målvakten använda händerna?",
+        options: [
+          "I hela sitt straffområde",
+          "Inom fem meter från varje mål",
+          "Över hela planen",
+          "Endast inom målburens längd",
+        ],
+        correct: 1,
+        explanation:
+          "Det finns ingen markerad straffzon, men målvakten får använda händerna inom en tänkt 5‑metershalvcirkel från varje målstolpe.",
+      },
+      // 7v7-nivå
+      {
+        level: 2,
+        type: "multiple",
+        question: "Finns offside i 7‑mot‑7?",
+        options: [
+          "Ja, alltid",
+          "Nej, offside tillämpas inte i 7‑mot‑7",
+          "Bara på egen planhalva",
+          "Bara under hörnor",
+        ],
+        correct: 1,
+        explanation:
+          "Offside tillämpas inte i 7‑mot‑7 – regeln införs först i 9‑mot‑9.",
+      },
+      {
+        level: 2,
+        type: "multiple",
+        question: "Hur långt ska motspelarna stå från bollen vid frispark i 7‑mot‑7?",
+        options: ["3 meter", "5 meter", "7 meter", "9 meter"],
+        correct: 2,
+        explanation:
+          "Motståndarna ska stå minst 7 meter från bollen vid frispark i 7‑mot‑7.",
+      },
+      {
+        level: 2,
+        type: "scenario",
+        question:
+          "Du dömer en 7v7-match. Får man göra mål direkt på en inspark (målvaktens utspark)?",
+        options: [
+          "Ja, direkt mål godkänns",
+          "Nej, bollen måste röra en spelare först",
+          "Bara om bollen studsar i målgården",
+          "Bara om domaren tillåter",
+        ],
+        correct: 1,
+        explanation:
+          "I 7‑mot‑7 får man inte göra mål direkt på inspark – bollen måste beröra en annan spelare innan den kan resultera i mål.",
+      },
+      {
+        level: 2,
+        type: "multiple",
+        question:
+          "Hur många spelare (inklusive målvakt) har ett lag på plan i 7‑mot‑7?",
+        options: ["5 spelare", "6 spelare", "7 spelare", "8 spelare"],
+        correct: 2,
+        explanation:
+          "Ett lag i 7‑mot‑7 har sex utespelare och en målvakt, totalt sju spelare på planen.",
+      },
+      // 9v9-nivå
+      {
+        level: 3,
+        type: "multiple",
+        question: "Var går gränsen för offside i 9‑mot‑9?",
+        options: [
+          "Offside tillämpas inte",
+          "Spelaren är i offside om någon del av kroppen är på motståndarens planhalva och närmare mållinjen än bollen och näst sista motspelare",
+          "Spelaren är i offside bara på egen planhalva",
+          "En spelare i offside bedöms aldrig",
+        ],
+        correct: 1,
+        explanation:
+          "En spelare är i offsideposition om huvud, kropp eller fötter är på motståndarens planhalva och närmare mållinjen än både bollen och näst sista motspelare och därefter deltar i spelet.",
+      },
+      {
+        level: 3,
+        type: "multiple",
+        question:
+          "Vad är det minsta antalet spelare (inklusive målvakt) som krävs för att en 9‑mot‑9‑match ska fortsätta?",
+        options: ["5 spelare", "7 spelare", "8 spelare", "9 spelare"],
+        correct: 1,
+        explanation:
+          "En match kan inte börja eller fortsätta om något av lagen har färre än 7 spelare.",
+      },
+      {
+        level: 3,
+        type: "scenario",
+        question:
+          "Du dömer en 9v9-match. Får man göra mål direkt på ett inkast?",
+        options: [
+          "Ja",
+          "Nej – det blir inspark eller hörna",
+          "Bara i första halvlek",
+          "Bara om domaren signalerar",
+        ],
+        correct: 1,
+        explanation:
+          "Man får inte göra mål direkt på inkast; skulle bollen gå direkt i mål döms inspark eller hörna.",
+      },
+      {
+        level: 3,
+        type: "multiple",
+        question:
+          "Vilken bollstorlek används i 9‑mot‑9 för 13‑åringar och 14‑åringar?",
+        options: [
+          "Storlek 4 för båda",
+          "Storlek 5 för båda",
+          "Storlek 4 för 13‑åringar och storlek 5 för 14‑åringar",
+          "Storlek 3 för 13‑åringar och storlek 4 för 14‑åringar",
+        ],
+        correct: 2,
+        explanation:
+          "I 9‑mot‑9 använder 13‑åringar bollstorlek 4 och 14‑åringar bollstorlek 5.",
+      },
+      // Avancerat domarkunskap
+      {
+        level: 4,
+        type: "multiple",
+        question: "Hur markerar domaren att en frispark är indirekt?",
+        options: [
+          "Genom att vissla två gånger",
+          "Genom att hålla armen upprätt över huvudet",
+          "Genom att peka mot mittlinjen",
+          "Genom att visa ett gult kort",
+        ],
+        correct: 1,
+        explanation:
+          "Domaren markerar indirekt frispark genom att hålla armen upprätt tills bollen har vidrört en annan spelare.",
+      },
+      {
+        level: 4,
+        type: "multiple",
+        question:
+          "Vilka situationer leder till direkt frispark? (Välj det bästa alternativet)",
+        options: [
+          "Att sparka eller fälla en motspelare, hands, eller hålla fast en spelare",
+          "Att ta för lång tid på en inspark",
+          "Att protestera mot domaren",
+          "Att stå för nära vid frispark",
+        ],
+        correct: 0,
+        explanation:
+          "Att sparka, fälla, tackla eller knuffa en motspelare, samt avsiktligt spela bollen med hand/arm, leder till direkt frispark.",
+      },
+      {
+        level: 4,
+        type: "scenario",
+        question: "När visar domaren rött kort?",
+        options: [
+          "Vid upprepade regelbrott",
+          "Vid farligt spel med överdriven kraft, spottning eller förolämpningar",
+          "Om en spelare sparkar bollen över sidlinjen",
+          "När domaren bestämmer sig för en paus",
+        ],
+        correct: 1,
+        explanation:
+          "Rött kort ges för grovt regelbrott som farligt spel med överdriven kraft, våldsamt beteende, spottning, grova förolämpningar eller om spelaren får två gula kort.",
+      },
+      {
+        level: 4,
+        type: "multiple",
+        question:
+          "Hur ska spelarna och målvakten placeras när en straffspark slås?",
+        options: [
+          "Alla spelare får stå var som helst",
+          "Straffskytten får springa från halva planen och målvakten får röra sig fritt",
+          "Skytten ska stå vid straffpunkten, målvakten på mållinjen, övriga spelare utanför straffområdet och minst 9 meter från bollen",
+          "Målvakten får stå var som helst i straffområdet",
+        ],
+        correct: 2,
+        explanation:
+          "Vid straffspark ska straffskytten stå vid straffpunkten, målvakten ha minst en fot på mållinjen, och övriga spelare stå bakom straffpunkten, utanför straffområdet och minst 9 meter från bollen.",
+      },
+    ];
+
+    // Generera 1000 frågor genom att replikera grundfrågorna över flera nivåer och typer.
+    const questions = [];
+    const desiredCount = 1000;
+    const totalLevels = 13; // Antal nivåer i vårt nya nivåsystem
+    // Helper för att slumpa typ av fråga vid generering
+    function randomType(baseType) {
+      // 15% blir tidsfrågor, 15% scenarier, övriga behåller basens typ
+      const rand = Math.random();
+      if (rand < 0.15) return "timed";
+      if (rand < 0.3) return "scenario";
+      return baseType || "multiple";
+    }
+    while (questions.length < desiredCount) {
+      for (const q of baseQuestions) {
+        if (questions.length >= desiredCount) break;
+        const copy = { ...q };
+        // Tilldela nivå baserat på var i listan vi befinner oss (cirkulärt över 13 nivåer)
+        copy.level = questions.length % totalLevels;
+        copy.type = randomType(q.type);
+        // Lägg till tidsgräns för tidsfrågor
+        if (copy.type === "timed") {
+          copy.timeLimit = 10; // sekunder
+        }
+        questions.push(copy);
+      }
+    }
+
+    // Nivånamn representerar en domarkarriär från smålagsspel till den största finalen
+    const levels = [
+      "3v3-domare",
+      "5v5-domare",
+      "7v7-domare",
+      "9v9-domare",
+      "11v11-domare",
+      "Division 2",
+      "Division 1",
+      "Superettan",
+      "Allsvenskan",
+      "Premier League",
+      "Serie A",
+      "Champions League",
+      "FIFA VM-final",
+    ];
+
+    // Game state
+    let currentLevel = 0;
+    let currentQuestionIndex = 0;
+    let currentStreak = 0;
+    let score = 0;
+    let awaitingRescue = false;
+    let playerName = "";
+    let timerInterval = null;
+    let timeLeft = 0;
+
+    // UI elements
+    const startScreen = document.getElementById("start-screen");
+    const quizBox = document.getElementById("quiz-box");
+    const questionEl = document.getElementById("question");
+    const optionsEl = document.getElementById("options");
+    const nextButton = document.getElementById("next-button");
+    const rescueButton = document.getElementById("rescue-button");
+    const levelEl = document.getElementById("level");
+    const scoreEl = document.getElementById("score");
+    const streakEl = document.getElementById("streak");
+    const timerEl = document.getElementById("timer");
+    const leaderboardDiv = document.getElementById("leaderboard");
+    const leaderboardBody = document.getElementById("leaderboard-body");
+
+    // Helper to get questions for current level
+    function getQuestionsForLevel(level) {
+      return questions.filter((q) => q.level === level);
+    }
+
+    // Initialize quiz for a player
+    function startQuiz(name) {
+      playerName = name;
+      currentLevel = 0;
+      currentQuestionIndex = 0;
+      currentStreak = 0;
+      score = 0;
+      awaitingRescue = false;
+      startScreen.classList.add("hidden");
+      leaderboardDiv.classList.add("hidden");
+      quizBox.classList.remove("hidden");
+      updateStatus();
+      showQuestion();
+    }
+
+    // Display current question
+    function showQuestion() {
+      const levelQuestions = getQuestionsForLevel(currentLevel);
+      if (currentQuestionIndex >= levelQuestions.length) {
+        // Level finished
+        alert(
+          `Grattis! Du har klarat nivå ${currentLevel + 1}: ${levels[currentLevel]}.`
+        );
+        // Advance to next level or finish quiz
+        currentLevel++;
+        currentQuestionIndex = 0;
+        if (currentLevel >= levels.length) {
+          finishQuiz();
+          return;
+        }
+        updateStatus();
+      }
+      const questionObj = getQuestionsForLevel(currentLevel)[currentQuestionIndex];
+      questionEl.textContent = questionObj.question;
+      optionsEl.innerHTML = "";
+      questionObj.options.forEach((opt, index) => {
+        const btn = document.createElement("button");
+        btn.textContent = opt;
+        btn.addEventListener("click", () => handleAnswer(index));
+        optionsEl.appendChild(btn);
+      });
+      // Hide buttons until answer is selected
+      nextButton.classList.add("hidden");
+      rescueButton.classList.add("hidden");
+      // Hantera tidsbegränsade frågor
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      timeLeft = 0;
+      timerEl.textContent = "";
+      if (questionObj.type === "timed") {
+        timeLeft = questionObj.timeLimit || 10;
+        timerEl.textContent = `Tid: ${timeLeft}s`;
+        timerInterval = setInterval(() => {
+          timeLeft--;
+          timerEl.textContent = `Tid: ${timeLeft}s`;
+          if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            // Tiden har gått ut – behandla som fel svar utan räddning
+            currentStreak = 0;
+            awaitingRescue = false;
+            alert("Tiden tog slut! Du hann inte svara.");
+            currentQuestionIndex++;
+            updateStatus();
+            showQuestion();
+          }
+        }, 1000);
+      }
+    }
+
+    // Handle answer selection
+    function handleAnswer(selectedIndex) {
+      const levelQuestions = getQuestionsForLevel(currentLevel);
+      const questionObj = levelQuestions[currentQuestionIndex];
+      const correct = selectedIndex === questionObj.correct;
+      // Stäng av eventuell timer
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      if (correct) {
+        // Correct answer
+        currentStreak++;
+        const streakBonus = currentStreak > 1 ? currentStreak * 10 : 0;
+        let timeBonus = 0;
+        if (questionObj.type === "timed") {
+          // ge bonus per kvarvarande sekund
+          timeBonus = timeLeft * 5;
+        }
+        score += 100 + streakBonus + timeBonus;
+        alert("Rätt svar! " + (questionObj.explanation || ""));
+        // proceed to next question
+        currentQuestionIndex++;
+        updateStatus();
+        showQuestion();
+      } else {
+        // Wrong answer: handle rescue or reset streak
+        if (!awaitingRescue) {
+          awaitingRescue = true;
+          // Show rescue button
+          rescueButton.classList.remove("hidden");
+          rescueButton.onclick = function () {
+            presentRescueQuestion();
+          };
+          alert(
+            `Fel svar. Rätt svar var "${questionObj.options[questionObj.correct]}". Du har chans till en räddningsfråga för att behålla din streak.`
+          );
+        } else {
+          // Already on a rescue question; reset streak
+          currentStreak = 0;
+          awaitingRescue = false;
+          alert(
+            `Tyvärr, fel igen. Rätt svar var "${questionObj.options[questionObj.correct]}". Din streak nollställs.`
+          );
+          currentQuestionIndex++;
+          updateStatus();
+          showQuestion();
+        }
+      }
+    }
+
+    // Present a rescue question from all questions pool
+    function presentRescueQuestion() {
+      rescueButton.classList.add("hidden");
+      // Stäng av eventuell timer när räddningsfråga visas
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      // Choose a random question from the same level but not the current one
+      const levelQuestions = getQuestionsForLevel(currentLevel);
+      const randomQuestions = levelQuestions.filter((q, idx) => idx !== currentQuestionIndex);
+      const rescueQ =
+        randomQuestions[Math.floor(Math.random() * randomQuestions.length)];
+      // Render rescue question
+      questionEl.textContent = `Räddningsfråga: ${rescueQ.question}`;
+      optionsEl.innerHTML = "";
+      rescueQ.options.forEach((opt, idx) => {
+        const btn = document.createElement("button");
+        btn.textContent = opt;
+        btn.addEventListener("click", () => {
+          const correct = idx === rescueQ.correct;
+          if (correct) {
+            alert(
+              "Bra! Du klarade räddningsfrågan och behåller din streak.\n" +
+                (rescueQ.explanation || "")
+            );
+            awaitingRescue = false;
+            // Continue with next question in current level
+            currentQuestionIndex++;
+            updateStatus();
+            showQuestion();
+          } else {
+            alert(
+              `Fel svar. Rätt svar var "${rescueQ.options[rescueQ.correct]}". Din streak nollställs.`
+            );
+            currentStreak = 0;
+            awaitingRescue = false;
+            currentQuestionIndex++;
+            updateStatus();
+            showQuestion();
+          }
+        });
+        optionsEl.appendChild(btn);
+      });
+    }
+
+    // Finish quiz, update leaderboard and show high score
+    function finishQuiz() {
+      quizBox.classList.add("hidden");
+      leaderboardDiv.classList.remove("hidden");
+      // Save score
+      const scores = JSON.parse(localStorage.getItem("domarQuizScores") || "[]");
+      // Check if player already exists in high score
+      const existing = scores.find((s) => s.name === playerName);
+      if (!existing || existing.score < score || existing.level < currentLevel) {
+        // Update or add
+        const record = { name: playerName, score: score, level: currentLevel };
+        if (existing) {
+          const idx = scores.indexOf(existing);
+          scores[idx] = record;
+        } else {
+          scores.push(record);
+        }
+        localStorage.setItem("domarQuizScores", JSON.stringify(scores));
+      }
+      // Sort scores descending
+      scores.sort((a, b) => b.score - a.score || b.level - a.level);
+      // Populate leaderboard
+      leaderboardBody.innerHTML = "";
+      scores.forEach((entry, index) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${
+          levels[entry.level - 1] || "-"
+        }</td>`;
+        leaderboardBody.appendChild(tr);
+      });
+      alert(`Quiz klart! Slutpoäng: ${score}`);
+    }
+
+    // Update status display
+    function updateStatus() {
+      levelEl.textContent = `Nivå: ${levels[currentLevel]}`;
+      scoreEl.textContent = `Poäng: ${score}`;
+      streakEl.textContent = `Streak: ${currentStreak}`;
+    }
+
+    // Start button handler
+    document.getElementById("start-button").addEventListener("click", () => {
+      const nameInput = document.getElementById("player-name");
+      const name = nameInput.value.trim();
+      if (!name) {
+        alert("Ange ett namn för att börja.");
+        return;
+      }
+      startQuiz(name);
+    });
+  </script>
+</body>
+</html>

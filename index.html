@@ -231,6 +231,9 @@
         <span id="streak"></span>
         <span id="timer"></span>
       </div>
+
+      <!-- Knapp för att visa topplista även när man spelar -->
+      <button id="show-leaderboard-button-quiz" style="margin-top: 1rem; padding: 0.75rem 1.5rem; font-size: 1rem; background-color: #fdd835; color: #00295c; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Visa topplista</button>
     </div>
     <div id="leaderboard" class="hidden">
       <h2>High Score</h2>
@@ -943,6 +946,32 @@
         }
         // Visa topplistan och göm övriga vyer
         startScreen.classList.add("hidden");
+        quizBox.classList.add("hidden");
+        messageEl.classList.add("hidden");
+        leaderboardDiv.classList.remove("hidden");
+        // Visa tillbaka-knappen
+        backButton.classList.remove("hidden");
+      });
+
+    // Show leaderboard button in quiz handler
+    document
+      .getElementById("show-leaderboard-button-quiz")
+      .addEventListener("click", () => {
+        // Hämta och sortera highscore
+        const scores = JSON.parse(
+          localStorage.getItem("domarresanScores") || "[]"
+        );
+        scores.sort((a, b) => b.score - a.score || b.level - a.level);
+        leaderboardBody.innerHTML = "";
+        scores.forEach((entry, index) => {
+          const tr = document.createElement("tr");
+          const levelName = levels[entry.level] || levels[0];
+          tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${levelName}</td>`;
+          leaderboardBody.appendChild(tr);
+        });
+        // Ange att vi kommer från spelvyn
+        previousView = "quiz";
+        // Visa topplistan och göm spelrutan
         quizBox.classList.add("hidden");
         messageEl.classList.add("hidden");
         leaderboardDiv.classList.remove("hidden");

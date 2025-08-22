@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Domarresan – Lär dig fotbollens regler</title>
+  <!-- Uppdaterad titel på svenska för att passa målgruppen -->
+  <title>Domarresan – Bli domarmästare</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -22,6 +23,7 @@
       align-items: center;
       gap: 0.5rem;
     }
+
     #app-logo {
       height: 50px;
       width: auto;
@@ -42,7 +44,7 @@
       margin-top: 1rem;
     }
     .question {
-      font-size: 1.2rem;
+      font-size: 1.3rem;
       margin-bottom: 1rem;
     }
     .options {
@@ -53,27 +55,63 @@
       background-color: #e1e5ea;
       border: none;
       border-radius: 4px;
-      padding: 0.75rem;
-      margin: 0.25rem 0;
-      font-size: 1rem;
+      padding: 1rem;
+      margin: 0.35rem 0;
+      font-size: 1.1rem;
       cursor: pointer;
       transition: background-color 0.2s;
     }
     .options button:hover {
       background-color: #d5dce4;
     }
+
+    /* Meddelande för rätt/fel svar */
+    #message {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+
+    /* Timer- och nivåindikatorer */
+    #timer-bar-container,
+    #level-progress-container {
+      width: 100%;
+      background-color: #e1e5ea;
+      border-radius: 4px;
+      margin-top: 0.5rem;
+      height: 8px;
+      overflow: hidden;
+    }
+
+    #timer-bar {
+      height: 100%;
+      background-color: #fdd835;
+      width: 100%;
+      transition: width 1s linear;
+    }
+
+    #level-progress {
+      height: 100%;
+      background-color: #00295c;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
     #status {
       margin-top: 1rem;
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
-      font-size: 0.9rem;
+      font-size: 1rem;
     }
     #status span {
       background-color: #fff;
       border-radius: 4px;
       padding: 0.5rem 0.75rem;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      font-weight: bold;
+      color: #00295c;
     }
     #next-button,
     #rescue-button {
@@ -123,6 +161,11 @@
     #start-screen button:hover {
       background-color: #fbc02d;
     }
+
+    /* Knapp för att visa topplistan har samma stil som övriga knappar */
+    #show-leaderboard-button {
+      margin-left: 0.5rem;
+    }
     #leaderboard {
       margin-top: 2rem;
     }
@@ -142,22 +185,44 @@
     #leaderboard th {
       background-color: #f8f9fa;
     }
+
+    /* Nytt: Topplistan ska sticka ut med större text och markering av första plats. */
+    #leaderboard td:nth-child(1) {
+      font-weight: bold;
+    }
+    #leaderboard tr:nth-child(1) td {
+      background-color: #fff9c4;
+    }
   </style>
 </head>
 <body>
   <header>
     <img src="logo.png" alt="Domarresan logotyp" id="app-logo" />
-    <h1 id="app-title">Domarresan – Lär dig fotbollens regler</h1>
+    <!-- Uppdaterad rubrik på svenska -->
+    <h1 id="app-title">Domarresan – Bli domarmästare</h1>
   </header>
   <div class="container">
     <div id="start-screen">
-      <p>Välkommen! Ange ditt namn för att börja din domarkarriär:</p>
+      <p>Välkommen! Ange ditt namn för att börja din domarresa.</p>
+      <p>Svara på frågor om fotbollens regler, samla poäng, bygg streaks och klättra från 3v3‑domare hela vägen till VM‑finalen!</p>
       <input type="text" id="player-name" placeholder="Ditt namn" />
+      <!-- Starta och visa topplistan -->
       <button id="start-button">Starta</button>
+      <button id="show-leaderboard-button">Visa topplista</button>
     </div>
     <div id="quiz-box" class="hidden">
       <div class="question" id="question"></div>
       <div class="options" id="options"></div>
+      <!-- Meddelande för att visa rätt/fel svar och förklaringar -->
+      <div id="message" class="hidden"></div>
+      <!-- Visuell timerindikator -->
+      <div id="timer-bar-container" class="hidden">
+        <div id="timer-bar"></div>
+      </div>
+      <!-- Visuell nivåindikator -->
+      <div id="level-progress-container">
+        <div id="level-progress"></div>
+      </div>
       <button id="rescue-button" class="hidden">Räddningsfråga</button>
       <button id="next-button" class="hidden">Nästa fråga</button>
       <div id="status">
@@ -515,6 +580,28 @@
     let playerName = "";
     let timerInterval = null;
     let timeLeft = 0;
+    let currentTimeLimit = 0;
+
+    // Keys for saving progress and scores in localStorage
+    const progressKeyPrefix = "domarresanProgress_";
+
+    // Load saved progress for a given player name, if any
+    function loadProgress(name) {
+      const data = localStorage.getItem(progressKeyPrefix + name);
+      return data ? JSON.parse(data) : null;
+    }
+
+    // Save current progress for the active player
+    function saveProgress() {
+      if (!playerName) return;
+      const progress = {
+        currentLevel,
+        currentQuestionIndex,
+        currentStreak,
+        score,
+      };
+      localStorage.setItem(progressKeyPrefix + playerName, JSON.stringify(progress));
+    }
 
     // UI elements
     const startScreen = document.getElementById("start-screen");
@@ -527,6 +614,10 @@
     const scoreEl = document.getElementById("score");
     const streakEl = document.getElementById("streak");
     const timerEl = document.getElementById("timer");
+    const messageEl = document.getElementById("message");
+    const timerBarContainer = document.getElementById("timer-bar-container");
+    const timerBar = document.getElementById("timer-bar");
+    const levelProgressBar = document.getElementById("level-progress");
     const leaderboardDiv = document.getElementById("leaderboard");
     const leaderboardBody = document.getElementById("leaderboard-body");
 
@@ -554,11 +645,12 @@
     function showQuestion() {
       const levelQuestions = getQuestionsForLevel(currentLevel);
       if (currentQuestionIndex >= levelQuestions.length) {
-        // Level finished
-        alert(
-          `Grattis! Du har klarat nivå ${currentLevel + 1}: ${levels[currentLevel]}.`
+        // Nivån är klar
+        showMessage(
+          `Grattis! Du har klarat nivå ${currentLevel + 1}: ${levels[currentLevel]}.`,
+          true
         );
-        // Advance to next level or finish quiz
+        // Flytta till nästa nivå eller avsluta quizet
         currentLevel++;
         currentQuestionIndex = 0;
         if (currentLevel >= levels.length) {
@@ -586,25 +678,36 @@
       }
       timeLeft = 0;
       timerEl.textContent = "";
+      // Reset timer bar to full width and hide by default
+      timerBar.style.width = "100%";
+      timerBarContainer.classList.add("hidden");
       if (questionObj.type === "timed") {
-        timeLeft = questionObj.timeLimit || 10;
-        timerEl.textContent = `Tid: ${timeLeft}s`;
+        currentTimeLimit = questionObj.timeLimit || 10;
+        timeLeft = currentTimeLimit;
+        timerEl.textContent = `Tid kvar: ${timeLeft}s`;
+        timerBarContainer.classList.remove("hidden");
+        timerBar.style.width = "100%";
         timerInterval = setInterval(() => {
           timeLeft--;
-          timerEl.textContent = `Tid: ${timeLeft}s`;
+          timerEl.textContent = `Tid kvar: ${timeLeft}s`;
+          const pct = (timeLeft / currentTimeLimit) * 100;
+          timerBar.style.width = pct + "%";
           if (timeLeft <= 0) {
             clearInterval(timerInterval);
             timerInterval = null;
             // Tiden har gått ut – behandla som fel svar utan räddning
             currentStreak = 0;
             awaitingRescue = false;
-            alert("Tiden tog slut! Du hann inte svara.");
+            showMessage("Tiden tog slut! Du hann inte svara.", false);
             currentQuestionIndex++;
             updateStatus();
             showQuestion();
           }
         }, 1000);
       }
+      // Uppdatera nivåmätare
+      const progress = (currentQuestionIndex / levelQuestions.length) * 100;
+      levelProgressBar.style.width = progress + "%";
     }
 
     // Handle answer selection
@@ -618,7 +721,7 @@
         timerInterval = null;
       }
       if (correct) {
-        // Correct answer
+        // Rätt svar
         currentStreak++;
         const streakBonus = currentStreak > 1 ? currentStreak * 10 : 0;
         let timeBonus = 0;
@@ -627,29 +730,34 @@
           timeBonus = timeLeft * 5;
         }
         score += 100 + streakBonus + timeBonus;
-        alert("Rätt svar! " + (questionObj.explanation || ""));
-        // proceed to next question
+        showMessage(
+          "Rätt svar! " + (questionObj.explanation || ""),
+          true
+        );
+        // gå vidare till nästa fråga
         currentQuestionIndex++;
         updateStatus();
         showQuestion();
       } else {
-        // Wrong answer: handle rescue or reset streak
+        // Fel svar: hantera räddning eller nollställ streak
         if (!awaitingRescue) {
           awaitingRescue = true;
-          // Show rescue button
+          // Visa räddningsknapp
           rescueButton.classList.remove("hidden");
           rescueButton.onclick = function () {
             presentRescueQuestion();
           };
-          alert(
-            `Fel svar. Rätt svar var "${questionObj.options[questionObj.correct]}". Du har chans till en räddningsfråga för att behålla din streak.`
+          showMessage(
+            `Fel svar. Rätt svar var "${questionObj.options[questionObj.correct]}". Du har chans till en räddningsfråga för att behålla din streak.`,
+            false
           );
         } else {
-          // Already on a rescue question; reset streak
+          // Redan på en räddningsfråga; nollställ streak
           currentStreak = 0;
           awaitingRescue = false;
-          alert(
-            `Tyvärr, fel igen. Rätt svar var "${questionObj.options[questionObj.correct]}". Din streak nollställs.`
+          showMessage(
+            `Tyvärr, fel igen. Rätt svar var "${questionObj.options[questionObj.correct]}". Din streak nollställs.`,
+            false
           );
           currentQuestionIndex++;
           updateStatus();
@@ -680,18 +788,20 @@
         btn.addEventListener("click", () => {
           const correct = idx === rescueQ.correct;
           if (correct) {
-            alert(
+            showMessage(
               "Bra! Du klarade räddningsfrågan och behåller din streak.\n" +
-                (rescueQ.explanation || "")
+                (rescueQ.explanation || ""),
+              true
             );
             awaitingRescue = false;
-            // Continue with next question in current level
+            // Fortsätt till nästa fråga i samma nivå
             currentQuestionIndex++;
             updateStatus();
             showQuestion();
           } else {
-            alert(
-              `Fel svar. Rätt svar var "${rescueQ.options[rescueQ.correct]}". Din streak nollställs.`
+            showMessage(
+              `Fel svar. Rätt svar var "${rescueQ.options[rescueQ.correct]}". Din streak nollställs.`,
+              false
             );
             currentStreak = 0;
             awaitingRescue = false;
@@ -709,7 +819,7 @@
       quizBox.classList.add("hidden");
       leaderboardDiv.classList.remove("hidden");
       // Save score
-      const scores = JSON.parse(localStorage.getItem("domarQuizScores") || "[]");
+      const scores = JSON.parse(localStorage.getItem("domarresanScores") || "[]");
       // Check if player already exists in high score
       const existing = scores.find((s) => s.name === playerName);
       if (!existing || existing.score < score || existing.level < currentLevel) {
@@ -721,7 +831,7 @@
         } else {
           scores.push(record);
         }
-        localStorage.setItem("domarQuizScores", JSON.stringify(scores));
+        localStorage.setItem("domarresanScores", JSON.stringify(scores));
       }
       // Sort scores descending
       scores.sort((a, b) => b.score - a.score || b.level - a.level);
@@ -734,7 +844,7 @@
         }</td>`;
         leaderboardBody.appendChild(tr);
       });
-      alert(`Quiz klart! Slutpoäng: ${score}`);
+      showMessage(`Quiz klart! Slutpoäng: ${score}`, true);
     }
 
     // Update status display
@@ -742,6 +852,8 @@
       levelEl.textContent = `Nivå: ${levels[currentLevel]}`;
       scoreEl.textContent = `Poäng: ${score}`;
       streakEl.textContent = `Streak: ${currentStreak}`;
+      // Spara progress efter varje statusuppdatering
+      saveProgress();
     }
 
     // Start button handler
@@ -749,11 +861,72 @@
       const nameInput = document.getElementById("player-name");
       const name = nameInput.value.trim();
       if (!name) {
-        alert("Ange ett namn för att börja.");
+        showMessage("Ange ett namn för att börja.", false);
         return;
+      }
+      // Kontrollera om det finns sparad progress för denna spelare
+      const existing = loadProgress(name);
+      if (existing) {
+        const continueGame = confirm(
+          "Det finns en sparad omgång för detta namn. Vill du fortsätta där du slutade?"
+        );
+        if (continueGame) {
+          // Återställ sparade värden
+          currentLevel = existing.currentLevel;
+          currentQuestionIndex = existing.currentQuestionIndex;
+          currentStreak = existing.currentStreak;
+          score = existing.score;
+          playerName = name;
+          startScreen.classList.add("hidden");
+          leaderboardDiv.classList.add("hidden");
+          quizBox.classList.remove("hidden");
+          updateStatus();
+          showQuestion();
+          return;
+        } else {
+          // Ta bort sparad progress om användaren vill börja om
+          localStorage.removeItem(progressKeyPrefix + name);
+        }
       }
       startQuiz(name);
     });
+
+    // Show leaderboard button handler
+    document
+      .getElementById("show-leaderboard-button")
+      .addEventListener("click", () => {
+        // Hämta och sortera highscore
+        const scores = JSON.parse(
+          localStorage.getItem("domarresanScores") || "[]"
+        );
+        scores.sort((a, b) => b.score - a.score || b.level - a.level);
+        leaderboardBody.innerHTML = "";
+        scores.forEach((entry, index) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${index + 1}</td><td>${entry.name}</td><td>${entry.score}</td><td>${
+            levels[entry.level - 1] || "-"
+          }</td>`;
+          leaderboardBody.appendChild(tr);
+        });
+        // Visa topplistan och dölj startskärmen och quizrutan
+        startScreen.classList.add("hidden");
+        quizBox.classList.add("hidden");
+        messageEl.classList.add("hidden");
+        leaderboardDiv.classList.remove("hidden");
+      });
+
+    // Visa meddelanden utan att använda blockerande alert
+    function showMessage(text, isCorrect) {
+      messageEl.textContent = text;
+      // Sätt färg baserat på om svaret var korrekt
+      messageEl.style.backgroundColor = isCorrect ? "#c8e6c9" : "#ffebee";
+      messageEl.style.color = isCorrect ? "#256029" : "#b71c1c";
+      messageEl.classList.remove("hidden");
+      // Dölj efter några sekunder
+      setTimeout(() => {
+        messageEl.classList.add("hidden");
+      }, 3000);
+    }
   </script>
 </body>
 </html>
